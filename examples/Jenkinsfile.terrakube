@@ -1,0 +1,14 @@
+pipeline {
+    agent none
+    stages {
+        stage('Terrakube provisioning') {
+            agent none
+            options {
+                terrakubeProvision(server: 'tk-prod', organizationId: 'org-prod',
+                    workspaceId: 'ws-prod', templateId: 'tpl-network', branch: 'main',
+                    operationKey: 'network-job', waitForCompletion: true, timeoutMinutes: 90)
+            }
+            steps { echo 'Terrakube job completed.' }
+        }
+    }
+}
