@@ -9,6 +9,7 @@ import org.kohsuke.stapler.DataBoundConstructor;
 /** Declarative stage option: options { terrakubeAwait(...) } */
 public final class TerrakubeAwaitStep extends AbstractAwaitStep {
  @DataBoundConstructor public TerrakubeAwaitStep(String server,String operationKey){super(server,operationKey);}
+ public String getServer(){return getConnectionId();}
  @Override protected String provider(){return "terrakube";}
  @Extension public static final class DescriptorImpl extends StepDescriptor {
   @Override public String getFunctionName(){return "terrakubeAwait";}

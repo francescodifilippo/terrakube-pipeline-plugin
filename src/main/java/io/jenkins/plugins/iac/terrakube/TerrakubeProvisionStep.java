@@ -16,6 +16,8 @@ public final class TerrakubeProvisionStep extends AbstractProvisionStep {
   super(server,workspaceId);this.organizationId=Identifiers.required(organizationId,"organizationId");
   this.templateId=Identifiers.required(templateId,"templateId");
  }
+ public String getServer(){return getConnectionId();}
+ public String getWorkspaceId(){return getTargetId();}
  public String getOrganizationId(){return organizationId;}
  public String getTemplateId(){return templateId;}
  public String getBranch(){return branch;}
