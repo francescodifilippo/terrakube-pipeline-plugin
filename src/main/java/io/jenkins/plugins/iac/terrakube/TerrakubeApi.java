@@ -25,7 +25,7 @@ public final class TerrakubeApi {
   return parse(transport.request("GET","/api/v1/organization/"+Identifiers.required(org,"organizationId")+
     "/job/"+Identifiers.required(id,"remoteId"),null));
  }
- private static String validBranch(String value) {
+ static String validBranch(String value) {
   if(value==null || value.isBlank() || value.length()>256 || value.chars().anyMatch(c->c<32 || c==127))
    throw new IllegalArgumentException("branch must be 1..256 characters without control characters");
   return value;
