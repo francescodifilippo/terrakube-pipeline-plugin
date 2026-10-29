@@ -21,12 +21,7 @@ public final class TerrakubeProvisionStep extends AbstractProvisionStep {
  public String getOrganizationId(){return organizationId;}
  public String getTemplateId(){return templateId;}
  public String getBranch(){return branch;}
- @DataBoundSetter public void setBranch(String value){branch = value == null || value.isBlank() ? null : validBranch(value);}
- private static String validBranch(String value) {
-  if (value.length() > 256 || value.chars().anyMatch(c -> c < 32 || c == 127))
-   throw new IllegalArgumentException("branch must be 1..256 characters without control characters");
-  return value;
- }
+ @DataBoundSetter public void setBranch(String value){branch = value == null || value.isBlank() ? null : TerrakubeApi.validBranch(value);}
  @Override protected String provider(){return "terrakube";}
  @Override protected Map<String,String> parameters(){
   Map<String,String> opts=new LinkedHashMap<>();opts.put("organizationId",organizationId);opts.put("templateId",templateId);
