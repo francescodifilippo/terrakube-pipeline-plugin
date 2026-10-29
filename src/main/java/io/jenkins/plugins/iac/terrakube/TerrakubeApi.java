@@ -7,8 +7,10 @@ import java.util.Set;
 /** Jobs are driven by Terrakube's own templates, not by OTF plan/apply flags. */
 public final class TerrakubeApi {
  private final HttpJsonClient transport;
- private static final Set<String> SUCCESS=Set.of("completed");
- private static final Set<String> FAILED=Set.of("failed","error","canceled","cancelled");
+ /** Terrakube JobStatus values, lowercased by the core: terminal = completed, noChanges, rejected, cancelled, failed. */
+ private static final Set<String> SUCCESS=Set.of("completed","nochanges");
+ private static final Set<String> FAILED=Set.of("failed","rejected","cancelled");
+ private static final Set<String> APPROVAL=Set.of("waitingapproval");
  TerrakubeApi(HttpJsonClient transport){this.transport=transport;}
  public JobResult submit(String org,String workspace,String template,String branch) throws IOException,InterruptedException {
   Identifiers.required(org,"organizationId");Identifiers.required(workspace,"workspaceId");Identifiers.required(template,"templateId");
@@ -29,6 +31,6 @@ public final class TerrakubeApi {
   return value;
  }
  private static JobResult parse(JsonNode response) throws IOException {
-  return HttpJsonClient.parse(response,SUCCESS,FAILED,Set.of());
+  return HttpJsonClient.parse(response,SUCCESS,FAILED,APPROVAL);
  }
 }
