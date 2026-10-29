@@ -1,0 +1,23 @@
+pipeline {
+    agent none
+    stages {
+        stage('Terrakube plan') {
+            agent none
+            options {
+                terrakubeProvision(server: 'tk-prod', organizationName: 'acme',
+                    workspaceName: 'network', templateName: 'Plan', branch: 'main',
+                    operationKey: 'network-plan')
+            }
+            steps { echo 'Terrakube plan completed.' }
+        }
+        stage('Terrakube apply') {
+            agent none
+            options {
+                terrakubeProvision(server: 'tk-prod', organizationId: 'org-prod',
+                    workspaceName: 'network', templateId: 'tpl-apply', branch: 'main',
+                    operationKey: 'network-apply', timeoutMinutes: 90)
+            }
+            steps { echo 'Terrakube apply completed.' }
+        }
+    }
+}
