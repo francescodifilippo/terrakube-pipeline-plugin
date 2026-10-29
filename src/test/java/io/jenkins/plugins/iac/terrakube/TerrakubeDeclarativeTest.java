@@ -34,6 +34,8 @@ class TerrakubeDeclarativeTest {
  private HttpServer terrakube;
  private final List<String> submits=new CopyOnWriteArrayList<>();
  private final Queue<String> statuses=new ConcurrentLinkedQueue<>();
+ /** Every request other than job submit and status. */
+ private final List<String> lookups=new CopyOnWriteArrayList<>();
 
  @BeforeEach void setUp(JenkinsRule rule) throws Exception {
   j=rule;
@@ -45,6 +47,10 @@ class TerrakubeDeclarativeTest {
   terrakube.createContext("/api/v1/organization/org-1/job/job-1",exchange -> {
    String next=statuses.poll();
    respond(exchange,200,next==null?"running":next);
+  });
+  terrakube.createContext("/",exchange -> {
+   lookups.add(exchange.getRequestMethod()+" "+exchange.getRequestURI().getRawPath());
+   exchange.sendResponseHeaders(404,-1);exchange.close();
   });
   terrakube.start();
   SystemCredentialsProvider.getInstance().getCredentials().add(
@@ -91,6 +97,36 @@ class TerrakubeDeclarativeTest {
   j.assertLogNotContains("applied body",b);
  }
 
+ @Test void eachKindNeedsItsIdOrName() throws Exception {
+  assertRejected("server: 'tk-test', workspaceId: 'ws-1', templateId: 'tpl-1'",
+    "terrakubeProvision needs organizationId or organizationName in the stage options");
+  assertRejected("server: 'tk-test', organizationName: 'acme', templateName: 'apply'",
+    "terrakubeProvision needs workspaceId or workspaceName in the stage options");
+  assertRejected("server: 'tk-test', organizationId: 'org-1', workspaceName: 'network'",
+    "terrakubeProvision needs templateId or templateName in the stage options");
+ }
+ @Test void idAndNameAreExclusive() throws Exception {
+  assertRejected("server: 'tk-test', organizationId: 'org-1', organizationName: 'acme', workspaceId: 'ws-1', templateId: 'tpl-1'",
+    "Use either organizationId or organizationName in the terrakubeProvision stage options, not both");
+  assertRejected("server: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', workspaceName: 'network', templateId: 'tpl-1'",
+    "Use either workspaceId or workspaceName in the terrakubeProvision stage options, not both");
+  assertRejected("server: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateId: 'tpl-1', templateName: 'apply'",
+    "Use either templateId or templateName in the terrakubeProvision stage options, not both");
+ }
+ @Test void invalidNameIsRejected() throws Exception {
+  assertRejected("server: 'tk-test', organizationName: 'acme', workspaceName: 'net\\nwork', templateId: 'tpl-1'",
+    "workspaceName must contain 1..255 characters without control characters");
+ }
+
+ private void assertRejected(String args,String message) throws Exception {
+  WorkflowRun b=j.buildAndAssertStatus(Result.FAILURE,pipeline(
+    "stage('plan') {\n options {\n terrakubeProvision("+args+")\n }\n steps {\n echo 'plan body'\n }\n}"));
+  j.assertLogContains(message,b);
+  j.assertLogNotContains("submitting target",b);
+  j.assertLogNotContains("plan body",b);
+  assertEquals(0,submits.size());
+  assertEquals(List.of(),lookups);
+ }
  private WorkflowJob pipeline(String stages) throws Exception {
   WorkflowJob p=j.createProject(WorkflowJob.class);
   p.setDefinition(new CpsFlowDefinition("pipeline {\n agent none\n stages {\n"+stages+"\n }\n}",true));
