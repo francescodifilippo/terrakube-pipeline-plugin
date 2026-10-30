@@ -38,6 +38,39 @@ public final class TerrakubeApi {
  public String workspaceIdByName(String organizationId,String organization,String name) throws IOException,InterruptedException {
   return idByName("workspace",organizationPath(organizationId)+"/workspace",name," in organization "+organization,WORKSPACE_ROWS);
  }
+ /** Every workspace named exactly {@code name}, possibly none; same read as {@link #workspaceIdByName}. */
+ List<String> workspaceIdsByName(String organizationId,String organization,String name) throws IOException,InterruptedException {
+  return idsByName("workspace",organizationPath(organizationId)+"/workspace",name," in organization "+organization,WORKSPACE_ROWS);
+ }
+ /**
+  * Creates a workspace in the organization ({@code POST /api/v1/organization/:id/workspace}). Terrakube answers 409
+  * when a workspace with the name exists, but checks this in the application, so concurrent creates may both succeed.
+  */
+ String createWorkspace(String organizationId,ObjectNode attributes,ObjectNode relationships) throws IOException,InterruptedException {
+  ObjectNode request=HttpJsonClient.JSON.createObjectNode();ObjectNode data=request.putObject("data");
+  data.put("type","workspace");data.set("attributes",attributes.deepCopy());
+  if(relationships.size()>0)data.set("relationships",relationships.deepCopy());
+  JsonNode created=transport.request("POST",organizationPath(organizationId)+"/workspace",request).path("data");
+  if(!"workspace".equals(created.path("type").asText()))throw new IOException("Terrakube did not return the created workspace");
+  return Identifiers.required(created.path("id").asText(null),"Terrakube workspace ID");
+ }
+ /** Category and key ({@code TERRAFORM:region}, {@code ENV:TF_LOG}) of every variable of the workspace. */
+ Set<String> variableKeys(String organizationId,String workspaceId) throws IOException,InterruptedException {
+  Set<String> keys=new HashSet<>();
+  for(JsonNode v:transport.request("GET",variablesPath(organizationId,workspaceId),null).path("data"))
+   keys.add(v.path("attributes").path("category").asText()+":"+v.path("attributes").path("key").asText());
+  return keys;
+ }
+ /** Creates a workspace variable; the value is sent, never logged. {@code category} is TERRAFORM or ENV. */
+ void createVariable(String organizationId,String workspaceId,String category,String key,String value,boolean sensitive) throws IOException,InterruptedException {
+  ObjectNode request=HttpJsonClient.JSON.createObjectNode();ObjectNode data=request.putObject("data");
+  data.put("type","variable");
+  data.putObject("attributes").put("key",key).put("value",value).put("category",category).put("hcl",false).put("sensitive",sensitive);
+  transport.request("POST",variablesPath(organizationId,workspaceId),request);
+ }
+ private static String variablesPath(String organizationId,String workspaceId){
+  return organizationPath(organizationId)+"/workspace/"+HttpJsonClient.pathSegment(Identifiers.required(workspaceId,"workspaceId"))+"/variable";
+ }
  public String templateIdByName(String organizationId,String organization,String name) throws IOException,InterruptedException {
   return idByName("template",organizationPath(organizationId)+"/template",name," in organization "+organization,TEMPLATE_ROWS);
  }
@@ -49,7 +82,7 @@ public final class TerrakubeApi {
   * The filter only narrows the list: a leading or trailing {@code *} is a wildcard even when quoted, and the database
   * collation may ignore case, so returned names are compared again before counting.
   */
- private String idByName(String kind,String path,String name,String where,int rows) throws IOException,InterruptedException {
+ private List<String> idsByName(String kind,String path,String name,String where,int rows) throws IOException,InterruptedException {
   Map<String,String> query=new LinkedHashMap<>();
   query.put("filter["+kind+"]","name=="+rsql(name)+("workspace".equals(kind)?";deleted==false":""));
   JsonNode response=transport.request("GET",path,query,null),data=response.path("data");
@@ -61,11 +94,15 @@ public final class TerrakubeApi {
   for(JsonNode item:data){
    JsonNode attributes=item.path("attributes");
    if(kind.equals(item.path("type").asText())&&name.equals(attributes.path("name").asText(null))&&!attributes.path("deleted").asBoolean(false))
-    ids.add(item.path("id").asText(null));
+    ids.add(Identifiers.required(item.path("id").asText(null),"Terrakube "+kind+" ID"));
   }
+  return ids;
+ }
+ private String idByName(String kind,String path,String name,String where,int rows) throws IOException,InterruptedException {
+  List<String> ids=idsByName(kind,path,name,where,rows);
   if(ids.isEmpty())throw new IllegalArgumentException("No Terrakube "+kind+" named '"+name+"'"+where+"; check "+kind+"Name or use "+kind+"Id");
   if(ids.size()>1)throw new IllegalArgumentException(ids.size()+" Terrakube "+kind+"s are named '"+name+"'"+where+" "+ids+"; use "+kind+"Id");
-  return Identifiers.required(ids.get(0),"Terrakube "+kind+" ID");
+  return ids.get(0);
  }
  /** RSQL single-quoted string: the parser drops a backslash and keeps the next character. */
  static String rsql(String value){return "'"+value.replace("\\","\\\\").replace("'","\\'")+"'";}

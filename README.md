@@ -3,7 +3,7 @@
 **Plugin ID:** `terrakube-pipeline`  
 **Status:** pre-release
 
-Declarative Jenkins Pipeline integration for Terrakube. It submits Terrakube jobs through the shared [IaC Pipeline API](https://github.com/francescodifilippo/iac-pipeline-api-plugin), persists build-local remote execution state, and supports synchronous or deferred waiting.
+Declarative Jenkins Pipeline integration for Terrakube. It submits Terrakube jobs through the shared [IaC Pipeline API](https://github.com/francescodifilippo/iac-pipeline-api-plugin), persists build-local remote execution state, and supports synchronous or deferred waiting. It can also create the workspaces those jobs run on.
 
 ## Requirements
 
@@ -50,6 +50,29 @@ In **Manage Jenkins → System → Terrakube connections**, configure the API co
 
 Uses `connection` and a previously submitted `operationKey` to resume waiting later in the same build. The provision stage it refers to must set that `operationKey` explicitly.
 
+### `terrakubeWorkspace`
+
+Finds a workspace by name, or creates it with its variables, then runs the stage. It runs no job. See [Workspace creation](#workspace-creation).
+
+| Parameter | Purpose |
+| --- | --- |
+| `connection` | configured Terrakube connection name |
+| `organizationName` | exact name of the Terrakube organization |
+| `workspaceName` | exact workspace name, up to 128 characters |
+| `terraformVersion` | Terraform (or OpenTofu) version the workspace runs, for example `1.9.5`; required |
+| `source` | optional repository URL; without it the workspace is CLI-driven |
+| `branchName` | branch of `source`; required with `source` |
+| `workingDirectory` | optional directory of the configuration inside the repository, for example `/stacks/network` (Terrakube's `folder`); `/` otherwise |
+| `vcsId` | optional ID of a Terrakube VCS connection of the organization, for private repositories |
+| `iacType` | optional `terraform` or `tofu`; Terrakube's default (`terraform`) otherwise |
+| `executionMode` | optional `remote` or `local`; the organization's default otherwise |
+| `description` | optional workspace description |
+| `variables` | optional map of plain Terraform variables |
+| `environmentVariables` | optional map of plain environment variables |
+| `sensitiveVariables` | optional map from Terraform variable name to the ID of a Jenkins Secret text credential |
+| `sensitiveEnvironmentVariables` | optional map from environment variable name to the ID of a Jenkins Secret text credential |
+| `ifExists` | `keep` (default) or `fail` when the workspace already exists |
+
 ## Names
 
 A stage can name its organization, workspace and template instead of giving their IDs, in any combination:
@@ -93,6 +116,64 @@ The token used by the connection must be able to read what the stage names, as c
 Terrakube superusers can read all of them.
 
 See [examples/Jenkinsfile.terrakube-by-name](examples/Jenkinsfile.terrakube-by-name).
+
+## Workspace creation
+
+`terrakubeWorkspace` creates a workspace in a stage of its own, separate from the stages that run jobs:
+
+```groovy
+stage('Workspace') {
+  options {
+    terrakubeWorkspace(
+      connection: 'terrakube-prod',
+      organizationName: 'acme',
+      workspaceName: 'network',
+      terraformVersion: '1.9.5',
+      source: 'https://github.com/acme/infrastructure.git',
+      branchName: 'main',
+      variables: [region: 'eu-west-1', subnet_count: 3],
+      sensitiveVariables: [db_password: 'network-db-password']
+    )
+  }
+  steps { echo 'Workspace is ready' }
+}
+```
+
+A later stage runs jobs on it with `terrakubeProvision(organizationName: 'acme', workspaceName: 'network', templateName: ...)`, as described in [Names](#names). See [examples/Jenkinsfile.terrakube-create-workspace](examples/Jenkinsfile.terrakube-create-workspace).
+
+### Existing workspaces
+
+When the stage runs, the plugin looks the organization up by name, then lists its workspaces named exactly `workspaceName`, as `terrakubeProvision` does. Deleted workspaces are ignored.
+
+- No workspace: the plugin creates it, then creates its variables.
+- One workspace: with `ifExists: 'keep'` (default) the stage uses it. Its settings and variables are not compared or changed. With `ifExists: 'fail'` the stage fails.
+- More than one: the stage fails and lists their IDs.
+
+Terrakube rejects a second workspace with the same name in an organization (HTTP 409), and the plugin then treats the workspace as existing. Terrakube checks this in the application, not in the database, so two creates at the same moment can both succeed. After creating a workspace the plugin lists the name again and fails the stage, before creating any variable, if it finds another workspace. Prevent this with `disableConcurrentBuilds()` or a `lock` around the stage.
+
+### Source
+
+- With `source` and `branchName`, jobs read the configuration from that repository. For a private repository, set `vcsId` to an existing VCS connection of the organization; the plugin does not create one.
+- Without `source`, the workspace is CLI-driven, as Terrakube's UI creates it (`source` `empty`, `branch` `remote-content`): its configuration must be uploaded, for example with the Terraform CLI, before a job can run.
+
+### Variables
+
+- `variables` and `environmentVariables` hold plain values. Numbers and booleans are turned into strings. They are visible in Terrakube to anyone who can read the workspace variables.
+- `sensitiveVariables` and `sensitiveEnvironmentVariables` name a Jenkins **Secret text** credential for each variable. The plugin reads the credential when it creates the variable and sends the value to Terrakube as a sensitive variable, whose value the API never returns. The value is not stored in the build and never written to the log.
+- A name can be in either the plain or the sensitive map of its category, not both.
+- All values are sent as strings (`hcl: false`).
+
+The plugin checks that every credential exists before it creates the workspace. The build log shows the variable names, never their values.
+
+If a variable cannot be created, the stage fails and names the workspace. The workspace then exists with only some of its variables, and a later run of the stage keeps it as it is: set the missing variables in Terrakube, or delete the workspace before running the stage again.
+
+### Restarts
+
+The step holds no executor. It saves that it sent the create request before sending it. If Jenkins restarts afterwards, the resumed step finds the workspace, treats it as its own, and creates only the variables that are still missing.
+
+### Permissions
+
+Creating the workspace and its variables needs a team with the organization permission **Manage Workspaces**. Terrakube's project-limited create permission does not apply, because the step does not assign a project.
 
 ## Operation keys
 
@@ -145,7 +226,7 @@ stage('Terrakube provisioning') {
 }
 ```
 
-See [examples/Jenkinsfile.terrakube](examples/Jenkinsfile.terrakube), and [examples/Jenkinsfile.terrakube-by-name](examples/Jenkinsfile.terrakube-by-name) for a stage that uses names.
+See [examples/Jenkinsfile.terrakube](examples/Jenkinsfile.terrakube), and [examples/Jenkinsfile.terrakube-by-name](examples/Jenkinsfile.terrakube-by-name) for a stage that uses names. [examples/Jenkinsfile.terrakube-create-workspace](examples/Jenkinsfile.terrakube-create-workspace) creates the workspace first.
 
 ## Asynchronous execution
 
@@ -179,15 +260,11 @@ Terrakube-specific `organizationId` (resolved from `organizationName` when a nam
 
 Keep API tokens in Jenkins Credentials and use HTTPS for production endpoints. See [SECURITY.md](SECURITY.md).
 
+`terrakubeWorkspace` needs the **Manage Workspaces** permission (see [Permissions](#permissions)); use a separate connection and token for pipelines that create workspaces. Put secrets only in `sensitiveVariables` or `sensitiveEnvironmentVariables`, never in the plain maps.
+
 ## Compatibility
 
 The public DSL uses `connection`, like the other IaC provider plugins, and retains `organizationId`, `workspaceId`, and `templateId`, with `organizationName`, `workspaceName`, and `templateName` as optional alternatives; the shared core remains provider-neutral. The IDs are now optional in Pipeline Syntax, since a name can replace each of them.
-
-## Possible future features
-
-These ideas are not planned and may never be implemented. They are listed so that the current scope is clear.
-
-- **Workspace creation.** The plugin works only with organizations, workspaces and templates that already exist in Terrakube. A future step could create a workspace, or update its settings such as the VCS repository and variables, and reuse an existing workspace instead of creating a duplicate. Creating and configuring workspaces is a different concern from running jobs on them, so this does not seem to belong in this plugin at the moment.
 
 ## Development
 

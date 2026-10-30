@@ -13,6 +13,7 @@ Status: **pre-release**.
 - [x] documentation-as-code README and Pipeline examples
 - [x] Jenkins test-harness plugin wiring coverage
 - [ ] Validate organization/workspace/template/branch execution against a real Terrakube deployment
+- [ ] Validate `terrakubeWorkspace` creation (repository and CLI-driven sources, plain and sensitive variables), its restart behaviour, and the required team permission against a real Terrakube deployment
 
 ## Before Jenkins hosting / first release
 

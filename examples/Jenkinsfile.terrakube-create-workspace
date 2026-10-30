@@ -1,0 +1,35 @@
+pipeline {
+    agent none
+    options { disableConcurrentBuilds() }
+    stages {
+        stage('Terrakube workspace') {
+            options {
+                terrakubeWorkspace(
+                    connection: 'terrakube-prod',
+                    organizationName: 'acme',
+                    workspaceName: 'network',
+                    terraformVersion: '1.9.5',
+                    source: 'https://github.com/acme/infrastructure.git',
+                    branchName: 'main',
+                    workingDirectory: '/stacks/network',
+                    variables: [region: 'eu-west-1', subnet_count: 3],
+                    environmentVariables: [TF_LOG: 'INFO'],
+                    sensitiveVariables: [db_password: 'network-db-password']
+                )
+            }
+            steps { echo 'Workspace is ready.' }
+        }
+        stage('Terrakube plan') {
+            options {
+                terrakubeProvision(
+                    connection: 'terrakube-prod',
+                    organizationName: 'acme',
+                    workspaceName: 'network',
+                    templateName: 'plan',
+                    operationKey: 'terrakube-plan'
+                )
+            }
+            steps { echo 'Plan completed.' }
+        }
+    }
+}
