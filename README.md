@@ -33,7 +33,7 @@ In **Manage Jenkins → System → Terrakube connections**, configure the API co
 
 | Parameter | Purpose |
 | --- | --- |
-| `server` | configured Terrakube connection |
+| `connection` | configured Terrakube connection |
 | `organizationId` | Terrakube organization ID; set either `organizationId` or `organizationName` |
 | `organizationName` | exact organization name, looked up when the stage runs (see [Names](#names)) |
 | `workspaceId` | Terrakube workspace ID; set either `workspaceId` or `workspaceName` |
@@ -48,7 +48,7 @@ In **Manage Jenkins → System → Terrakube connections**, configure the API co
 
 ### `terrakubeAwait`
 
-Uses `server` and a previously submitted `operationKey` to resume waiting later in the same build. The provision stage it refers to must set that `operationKey` explicitly.
+Uses `connection` and a previously submitted `operationKey` to resume waiting later in the same build. The provision stage it refers to must set that `operationKey` explicitly.
 
 ## Names
 
@@ -58,7 +58,7 @@ A stage can name its organization, workspace and template instead of giving thei
 stage('Terrakube provisioning') {
   options {
     terrakubeProvision(
-      server: 'tk-prod',
+      connection: 'tk-prod',
       organizationName: 'acme',
       workspaceName: 'network',
       templateName: 'Plan and apply',
@@ -123,6 +123,7 @@ Transient status poll errors (I/O errors, HTTP 5xx, 408, 429) are retried as des
 - `terrakubeAwait` requires the explicit `operationKey` of an earlier provision stage.
 - Transient status poll errors are retried instead of failing the stage at once.
 - `organizationId`, `workspaceId`, and `templateId` are optional in Pipeline Syntax, since a name can replace each of them. A stage that sets neither the ID nor the name is no longer rejected when the Pipeline is parsed: earlier stages run, and that stage fails when it starts, for example with `terrakubeProvision needs organizationId or organizationName in the stage options`.
+- The step parameter `server` was renamed to `connection` after `0.1.0-beta-1`, so that all IaC provider plugins use the same name. Pipelines written for that pre-release must replace `server:` with `connection:`. The saved connection list was renamed too, so connections configured with `0.1.0-beta-1` must be entered again.
 
 ## Example
 
@@ -130,7 +131,7 @@ Transient status poll errors (I/O errors, HTTP 5xx, 408, 429) are retried as des
 stage('Terrakube provisioning') {
   options {
     terrakubeProvision(
-      server: 'tk-prod',
+      connection: 'tk-prod',
       organizationId: 'org-prod',
       workspaceId: 'ws-prod',
       templateId: 'tpl-network',
@@ -153,7 +154,7 @@ Set `waitForCompletion: false` to submit the job and continue Jenkins execution.
 ```groovy
 stage('Submit') {
   options {
-    terrakubeProvision(server: 'tk-prod', organizationId: 'org-prod', workspaceId: 'ws-prod',
+    terrakubeProvision(connection: 'tk-prod', organizationId: 'org-prod', workspaceId: 'ws-prod',
       templateId: 'tpl-network', operationKey: 'network-job', waitForCompletion: false)
   }
   steps {
@@ -162,7 +163,7 @@ stage('Submit') {
 }
 stage('Await') {
   options {
-    terrakubeAwait(server: 'tk-prod', operationKey: 'network-job')
+    terrakubeAwait(connection: 'tk-prod', operationKey: 'network-job')
   }
   steps {
     echo 'Terrakube job completed'
@@ -180,7 +181,7 @@ Keep API tokens in Jenkins Credentials and use HTTPS for production endpoints. S
 
 ## Compatibility
 
-The public DSL retains `server`, `organizationId`, `workspaceId`, and `templateId`, with `organizationName`, `workspaceName`, and `templateName` as optional alternatives; the shared core remains provider-neutral. The IDs are now optional in Pipeline Syntax, since a name can replace each of them.
+The public DSL uses `connection`, like the other IaC provider plugins, and retains `organizationId`, `workspaceId`, and `templateId`, with `organizationName`, `workspaceName`, and `templateName` as optional alternatives; the shared core remains provider-neutral. The IDs are now optional in Pipeline Syntax, since a name can replace each of them.
 
 ## Possible future features
 
