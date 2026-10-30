@@ -15,12 +15,12 @@ import org.kohsuke.stapler.DataBoundSetter;
 public final class TerrakubeProvisionStep extends AbstractProvisionStep {
  private String organizationId,templateId,branch,organizationName,workspaceName,templateName;
  /** The IDs are optional setters so that Pipeline Syntax does not list them as required. */
- @DataBoundConstructor public TerrakubeProvisionStep(String server){super(server);}
+ @DataBoundConstructor public TerrakubeProvisionStep(String connection){super(connection);}
  /** Convenience for Java callers; Pipeline binds the IDs through their setters. */
- public TerrakubeProvisionStep(String server,String workspaceId,String organizationId,String templateId){
-  super(server,workspaceId);setOrganizationId(organizationId);setTemplateId(templateId);
+ public TerrakubeProvisionStep(String connection,String workspaceId,String organizationId,String templateId){
+  super(connection,workspaceId);setOrganizationId(organizationId);setTemplateId(templateId);
  }
- public String getServer(){return getConnectionId();}
+ public String getConnection(){return getConnectionId();}
  public String getWorkspaceId(){return getTargetId();}
  public String getOrganizationId(){return organizationId;}
  public String getTemplateId(){return templateId;}

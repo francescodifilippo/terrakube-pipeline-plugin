@@ -73,7 +73,7 @@ class TerrakubeDeclarativeTest {
   SystemCredentialsProvider.getInstance().save();
   Connection c=new Connection("tk-test","http://127.0.0.1:"+terrakube.getAddress().getPort(),"terrakube-token");
   c.setAllowHttp(true);
-  TerrakubeConnections.get().setServers(List.of(c));
+  TerrakubeConnections.get().setConnections(List.of(c));
  }
 
  @AfterEach void tearDown(){terrakube.stop(0);}
@@ -81,9 +81,9 @@ class TerrakubeDeclarativeTest {
  @Test void asyncJobReportsApprovalPendingThenAwaits() throws Exception {
   statuses.add("waitingApproval");statuses.add("completed");
   WorkflowRun b=j.buildAndAssertSuccess(pipeline(
-    "stage('submit') {\n options {\n terrakubeProvision(server: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateId: 'tpl-1', branch: 'main', operationKey: 'deploy', waitForCompletion: false)\n }\n"+
+    "stage('submit') {\n options {\n terrakubeProvision(connection: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateId: 'tpl-1', branch: 'main', operationKey: 'deploy', waitForCompletion: false)\n }\n"+
     " steps {\n echo 'submitted'\n }\n}\n"+
-    "stage('await') {\n options {\n terrakubeAwait(server: 'tk-test', operationKey: 'deploy', pollingSeconds: 5)\n }\n"+
+    "stage('await') {\n options {\n terrakubeAwait(connection: 'tk-test', operationKey: 'deploy', pollingSeconds: 5)\n }\n"+
     " steps {\n echo 'awaited'\n }\n}"));
   assertEquals(1,submits.size());
   assertTrue(submits.get(0).contains("\"templateReference\":\"tpl-1\""),submits.get(0));
@@ -97,7 +97,7 @@ class TerrakubeDeclarativeTest {
  @Test void noChangesJobSucceeds() throws Exception {
   statuses.add("noChanges");
   WorkflowRun b=j.buildAndAssertSuccess(pipeline(
-    "stage('plan') {\n options {\n terrakubeProvision(server: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateId: 'tpl-1', pollingSeconds: 5)\n }\n"+
+    "stage('plan') {\n options {\n terrakubeProvision(connection: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateId: 'tpl-1', pollingSeconds: 5)\n }\n"+
     " steps {\n echo 'plan body'\n }\n}"));
   j.assertLogContains("completed ID job-1 with status nochanges",b);
   j.assertLogContains("plan body",b);
@@ -106,7 +106,7 @@ class TerrakubeDeclarativeTest {
  @Test void rejectedJobFailsTheStage() throws Exception {
   statuses.add("waitingApproval");statuses.add("rejected");
   WorkflowRun b=j.buildAndAssertStatus(Result.FAILURE,pipeline(
-    "stage('apply') {\n options {\n terrakubeProvision(server: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateId: 'tpl-1', pollingSeconds: 5)\n }\n"+
+    "stage('apply') {\n options {\n terrakubeProvision(connection: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateId: 'tpl-1', pollingSeconds: 5)\n }\n"+
     " steps {\n echo 'applied body'\n }\n}"));
   j.assertLogContains("Remote operation job-1 failed: rejected",b);
   j.assertLogNotContains("applied body",b);
@@ -115,7 +115,7 @@ class TerrakubeDeclarativeTest {
  @Test void idsMakeNoLookup() throws Exception {
   statuses.add("completed");
   WorkflowRun b=j.buildAndAssertSuccess(pipeline(
-    "stage('plan') {\n options {\n terrakubeProvision(server: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateId: 'tpl-1', pollingSeconds: 5)\n }\n"+
+    "stage('plan') {\n options {\n terrakubeProvision(connection: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateId: 'tpl-1', pollingSeconds: 5)\n }\n"+
     " steps {\n echo 'plan body'\n }\n}"));
   assertEquals(List.of(),lookups);
   assertTrue(submits.get(0).contains("\"id\":\"ws-1\""),submits.get(0));
@@ -126,9 +126,9 @@ class TerrakubeDeclarativeTest {
  @Test void namesAreResolvedOnceThenAwaited() throws Exception {
   statuses.add("waitingApproval");statuses.add("completed");
   WorkflowRun b=j.buildAndAssertSuccess(pipeline(
-    "stage('submit') {\n options {\n terrakubeProvision(server: 'tk-test', organizationName: 'acme', workspaceName: 'my ws', templateName: 'apply', branch: 'main', operationKey: 'deploy', waitForCompletion: false)\n }\n"+
+    "stage('submit') {\n options {\n terrakubeProvision(connection: 'tk-test', organizationName: 'acme', workspaceName: 'my ws', templateName: 'apply', branch: 'main', operationKey: 'deploy', waitForCompletion: false)\n }\n"+
     " steps {\n echo 'submitted'\n }\n}\n"+
-    "stage('await') {\n options {\n terrakubeAwait(server: 'tk-test', operationKey: 'deploy', pollingSeconds: 5)\n }\n"+
+    "stage('await') {\n options {\n terrakubeAwait(connection: 'tk-test', operationKey: 'deploy', pollingSeconds: 5)\n }\n"+
     " steps {\n echo 'awaited'\n }\n}"));
   assertEquals(List.of("GET /api/v1/organization?filter[organization]=name=='acme'",
     "GET /api/v1/organization/org-1/workspace?filter[workspace]=name=='my ws';deleted==false",
@@ -150,7 +150,7 @@ class TerrakubeDeclarativeTest {
  @Test void workspaceNameWithOrganizationAndTemplateIds() throws Exception {
   statuses.add("completed");
   WorkflowRun b=j.buildAndAssertSuccess(pipeline(
-    "stage('plan') {\n options {\n terrakubeProvision(server: 'tk-test', organizationId: 'org-1', workspaceName: 'network', templateId: 'tpl-9', pollingSeconds: 5)\n }\n"+
+    "stage('plan') {\n options {\n terrakubeProvision(connection: 'tk-test', organizationId: 'org-1', workspaceName: 'network', templateId: 'tpl-9', pollingSeconds: 5)\n }\n"+
     " steps {\n echo 'plan body'\n }\n}"));
   assertEquals(List.of("GET /api/v1/organization/org-1/workspace?filter[workspace]=name=='network';deleted==false"),lookups);
   assertTrue(submits.get(0).contains("\"id\":\"ws-1\""),submits.get(0));
@@ -164,7 +164,7 @@ class TerrakubeDeclarativeTest {
  @Test void workspaceIdWithOrganizationAndTemplateNames() throws Exception {
   statuses.add("completed");
   WorkflowRun b=j.buildAndAssertSuccess(pipeline(
-    "stage('plan') {\n options {\n terrakubeProvision(server: 'tk-test', organizationName: 'acme', workspaceId: 'ws-7', templateName: 'apply', pollingSeconds: 5)\n }\n"+
+    "stage('plan') {\n options {\n terrakubeProvision(connection: 'tk-test', organizationName: 'acme', workspaceId: 'ws-7', templateName: 'apply', pollingSeconds: 5)\n }\n"+
     " steps {\n echo 'plan body'\n }\n}"));
   assertEquals(List.of("GET /api/v1/organization?filter[organization]=name=='acme'",
     "GET /api/v1/organization/org-1/template?filter[template]=name=='apply'"),lookups);
@@ -177,7 +177,7 @@ class TerrakubeDeclarativeTest {
 
  @Test void unknownWorkspaceNameFailsBeforeSubmitting() throws Exception {
   WorkflowRun b=j.buildAndAssertStatus(Result.FAILURE,pipeline(
-    "stage('plan') {\n options {\n terrakubeProvision(server: 'tk-test', organizationName: 'acme', workspaceName: 'Network', templateName: 'apply')\n }\n"+
+    "stage('plan') {\n options {\n terrakubeProvision(connection: 'tk-test', organizationName: 'acme', workspaceName: 'Network', templateName: 'apply')\n }\n"+
     " steps {\n echo 'plan body'\n }\n}"));
   j.assertLogContains("No Terrakube workspace named 'Network' in organization 'acme'; check workspaceName or use workspaceId",b);
   assertEquals(2,lookups.size());
@@ -188,7 +188,7 @@ class TerrakubeDeclarativeTest {
 
  @Test void ambiguousTemplateNameFailsBeforeSubmitting() throws Exception {
   WorkflowRun b=j.buildAndAssertStatus(Result.FAILURE,pipeline(
-    "stage('plan') {\n options {\n terrakubeProvision(server: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateName: 'twin')\n }\n"+
+    "stage('plan') {\n options {\n terrakubeProvision(connection: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateName: 'twin')\n }\n"+
     " steps {\n echo 'plan body'\n }\n}"));
   j.assertLogContains("2 Terrakube templates are named 'twin' in organization org-1 [tpl-2, tpl-3]; use templateId",b);
   assertEquals(0,submits.size());
@@ -197,7 +197,7 @@ class TerrakubeDeclarativeTest {
 
  @Test void lookupHttpErrorsFailTheStage() throws Exception {
   WorkflowRun b=j.buildAndAssertStatus(Result.FAILURE,pipeline(
-    "stage('plan') {\n options {\n terrakubeProvision(server: 'tk-test', organizationId: 'org-404', workspaceName: 'network', templateId: 'tpl-1')\n }\n"+
+    "stage('plan') {\n options {\n terrakubeProvision(connection: 'tk-test', organizationId: 'org-404', workspaceName: 'network', templateId: 'tpl-1')\n }\n"+
     " steps {\n echo 'plan body'\n }\n}"));
   j.assertLogContains("IaC API HTTP 404 for GET /api/v1/organization/org-404/workspace",b);
   assertEquals(1,lookups.size());
@@ -206,23 +206,23 @@ class TerrakubeDeclarativeTest {
  }
 
  @Test void eachKindNeedsItsIdOrName() throws Exception {
-  assertRejected("server: 'tk-test', workspaceId: 'ws-1', templateId: 'tpl-1'",
+  assertRejected("connection: 'tk-test', workspaceId: 'ws-1', templateId: 'tpl-1'",
     "terrakubeProvision needs organizationId or organizationName in the stage options");
-  assertRejected("server: 'tk-test', organizationName: 'acme', templateName: 'apply'",
+  assertRejected("connection: 'tk-test', organizationName: 'acme', templateName: 'apply'",
     "terrakubeProvision needs workspaceId or workspaceName in the stage options");
-  assertRejected("server: 'tk-test', organizationId: 'org-1', workspaceName: 'network'",
+  assertRejected("connection: 'tk-test', organizationId: 'org-1', workspaceName: 'network'",
     "terrakubeProvision needs templateId or templateName in the stage options");
  }
  @Test void idAndNameAreExclusive() throws Exception {
-  assertRejected("server: 'tk-test', organizationId: 'org-1', organizationName: 'acme', workspaceId: 'ws-1', templateId: 'tpl-1'",
+  assertRejected("connection: 'tk-test', organizationId: 'org-1', organizationName: 'acme', workspaceId: 'ws-1', templateId: 'tpl-1'",
     "Use either organizationId or organizationName in the terrakubeProvision stage options, not both");
-  assertRejected("server: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', workspaceName: 'network', templateId: 'tpl-1'",
+  assertRejected("connection: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', workspaceName: 'network', templateId: 'tpl-1'",
     "Use either workspaceId or workspaceName in the terrakubeProvision stage options, not both");
-  assertRejected("server: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateId: 'tpl-1', templateName: 'apply'",
+  assertRejected("connection: 'tk-test', organizationId: 'org-1', workspaceId: 'ws-1', templateId: 'tpl-1', templateName: 'apply'",
     "Use either templateId or templateName in the terrakubeProvision stage options, not both");
  }
  @Test void invalidNameIsRejected() throws Exception {
-  assertRejected("server: 'tk-test', organizationName: 'acme', workspaceName: 'net\\nwork', templateId: 'tpl-1'",
+  assertRejected("connection: 'tk-test', organizationName: 'acme', workspaceName: 'net\\nwork', templateId: 'tpl-1'",
     "workspaceName must contain 1..255 characters without control characters");
  }
 

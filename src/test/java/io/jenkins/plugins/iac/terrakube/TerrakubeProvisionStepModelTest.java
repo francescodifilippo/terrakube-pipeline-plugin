@@ -15,20 +15,20 @@ class TerrakubeProvisionStepModelTest {
  private final DescribableModel<TerrakubeProvisionStep> model=DescribableModel.of(TerrakubeProvisionStep.class);
 
  @Test void onlyServerIsRequired(){
-  assertTrue(model.getParameter("server").isRequired());
+  assertTrue(model.getParameter("connection").isRequired());
   for(String name:new String[]{"organizationId","workspaceId","templateId","organizationName","workspaceName","templateName","branch"})
    assertFalse(model.getParameter(name).isRequired(),name);
  }
  @Test void idsRoundTrip(JenkinsRule j) throws Exception {
-  TerrakubeProvisionStep step=model.instantiate(Map.of("server","tk","organizationId","org-1","workspaceId","ws-1","templateId","tpl-1","branch","main"));
+  TerrakubeProvisionStep step=model.instantiate(Map.of("connection","tk","organizationId","org-1","workspaceId","ws-1","templateId","tpl-1","branch","main"));
   assertEquals("ws-1",step.getWorkspaceId());
   Map<String,?> args=DescribableModel.uninstantiate2_(step).getArguments();
-  assertEquals(Map.of("server","tk","organizationId","org-1","workspaceId","ws-1","templateId","tpl-1","branch","main"),args);
+  assertEquals(Map.of("connection","tk","organizationId","org-1","workspaceId","ws-1","templateId","tpl-1","branch","main"),args);
  }
  @Test void snippetShowsTheIds(JenkinsRule j){
   String snippet=Snippetizer.object2Groovy(new TerrakubeProvisionStep("tk","ws-1","org-1","tpl-1"));
   assertTrue(snippet.startsWith("terrakubeProvision("),snippet);
-  for(String arg:new String[]{"server: 'tk'","organizationId: 'org-1'","workspaceId: 'ws-1'","templateId: 'tpl-1'"})
+  for(String arg:new String[]{"connection: 'tk'","organizationId: 'org-1'","workspaceId: 'ws-1'","templateId: 'tpl-1'"})
    assertTrue(snippet.contains(arg),snippet);
  }
  @Test void idsKeepTheirParametersAndDefaultKey(){
@@ -36,11 +36,11 @@ class TerrakubeProvisionStepModelTest {
   assertEquals(Map.of("organizationId","org-1","templateId","tpl-1","branch","main"),step.parameters());
  }
  @Test void namesRoundTrip(JenkinsRule j) throws Exception {
-  TerrakubeProvisionStep step=model.instantiate(Map.of("server","tk","organizationName","acme","workspaceName","my ws","templateName","Plan & Apply"));
+  TerrakubeProvisionStep step=model.instantiate(Map.of("connection","tk","organizationName","acme","workspaceName","my ws","templateName","Plan & Apply"));
   assertNull(step.getWorkspaceId());
   assertEquals(Map.of("organizationName","acme","workspaceName","my ws","templateName","Plan & Apply"),step.parameters());
   Map<String,?> args=DescribableModel.uninstantiate2_(step).getArguments();
-  assertEquals(Map.of("server","tk","organizationName","acme","workspaceName","my ws","templateName","Plan & Apply"),args);
+  assertEquals(Map.of("connection","tk","organizationName","acme","workspaceName","my ws","templateName","Plan & Apply"),args);
  }
  @Test void snippetShowsOnlyTheConfiguredParameters(JenkinsRule j){
   TerrakubeProvisionStep step=new TerrakubeProvisionStep("tk");

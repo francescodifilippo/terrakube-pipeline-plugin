@@ -31,26 +31,26 @@ class TerrakubeConnectionsTest {
  }
 
  @Test void roundtripsConnection() throws Exception {
-  TerrakubeConnections.get().setServers(List.of(new Connection("tk-prod",URL,"terrakube-token")));
+  TerrakubeConnections.get().setConnections(List.of(new Connection("tk-prod",URL,"terrakube-token")));
   HtmlPage page=j.createWebClient().goTo("configure");
   assertNotNull(page.querySelector("select.credentials-select[name='_.credentialsId']"),"credentials select rendered");
   j.configRoundtrip();
-  List<Connection> servers=TerrakubeConnections.get().getServers();
-  assertEquals(1,servers.size());
-  assertEquals("tk-prod",servers.get(0).getName());
-  assertEquals(URL,servers.get(0).getUrl());
-  assertEquals("terrakube-token",servers.get(0).getCredentialsId());
-  assertFalse(servers.get(0).isAllowHttp());
+  List<Connection> saved=TerrakubeConnections.get().getConnections();
+  assertEquals(1,saved.size());
+  assertEquals("tk-prod",saved.get(0).getName());
+  assertEquals(URL,saved.get(0).getUrl());
+  assertEquals("terrakube-token",saved.get(0).getCredentialsId());
+  assertFalse(saved.get(0).isAllowHttp());
  }
 
  @Test void deletingTheLastConnectionClearsTheList() throws Exception {
-  TerrakubeConnections.get().setServers(List.of(new Connection("tk-prod",URL,"terrakube-token")));
+  TerrakubeConnections.get().setConnections(List.of(new Connection("tk-prod",URL,"terrakube-token")));
   HtmlForm form=j.createWebClient().goTo("configure").getFormByName("config");
   DomNode chunk=form.querySelector("input[name='_.url'][value='"+URL+"']");
   while(chunk!=null && !(chunk instanceof DomElement e && e.getAttribute("class").contains("repeated-chunk")))chunk=chunk.getParentNode();
   assertNotNull(chunk,"connection entry rendered");
   chunk.remove();
   j.submit(form);
-  assertEquals(List.of(),TerrakubeConnections.get().getServers());
+  assertEquals(List.of(),TerrakubeConnections.get().getConnections());
  }
 }

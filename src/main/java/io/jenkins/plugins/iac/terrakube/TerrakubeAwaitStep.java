@@ -8,8 +8,8 @@ import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
 import org.kohsuke.stapler.DataBoundConstructor;
 /** Declarative stage option: options { terrakubeAwait(...) } */
 public final class TerrakubeAwaitStep extends AbstractAwaitStep {
- @DataBoundConstructor public TerrakubeAwaitStep(String server,String operationKey){super(server,operationKey);}
- public String getServer(){return getConnectionId();}
+ @DataBoundConstructor public TerrakubeAwaitStep(String connection,String operationKey){super(connection,operationKey);}
+ public String getConnection(){return getConnectionId();}
  @Override protected String provider(){return "terrakube";}
  @Extension public static final class DescriptorImpl extends StepDescriptor {
   @Override public String getFunctionName(){return "terrakubeAwait";}
