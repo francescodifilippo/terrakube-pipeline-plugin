@@ -1,24 +1,21 @@
 package io.jenkins.plugins.iac.terrakube;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import hudson.model.Run;
-import hudson.model.TaskListener;
+import io.jenkins.plugins.iac.core.AsyncBlockExecution;
 import io.jenkins.plugins.iac.core.HttpJsonClient;
 import io.jenkins.plugins.iac.core.IacHttpException;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import jenkins.util.Timer;
 import org.jenkinsci.plugins.plaincredentials.StringCredentials;
-import org.jenkinsci.plugins.workflow.steps.*;
+import org.jenkinsci.plugins.workflow.steps.StepContext;
 /**
- * Finds or creates the workspace of a {@code terrakubeWorkspace} step off the CPS thread, then runs the body.
+ * Finds or creates the workspace of a {@code terrakubeWorkspace} step, then lets the body run.
  * Terrakube rejects a second workspace with the same name (409), but checks this in the application, so after
  * creating one the name is listed again to catch a concurrent create. Safe to repeat after a restart: the execution
  * saves that it sent the create request, and a resumed execution that finds the workspace treats it as its own and
  * adds only the variables that are still missing.
  */
-final class TerrakubeWorkspaceExecution extends StepExecution {
+final class TerrakubeWorkspaceExecution extends AsyncBlockExecution {
  private static final long serialVersionUID=1L;
  private final String connection;
  private final TerrakubeWorkspaceSpec spec;
@@ -28,35 +25,23 @@ final class TerrakubeWorkspaceExecution extends StepExecution {
  /** True when this execution created the workspace, so that it sets the variables. */
  private boolean created;
  private String organizationId,workspaceId;
- private volatile boolean bodyStarted,stopped;
- private volatile BodyExecution body;
- private transient volatile Throwable stopCause;
- private transient Future<?> task;
 
  TerrakubeWorkspaceExecution(StepContext context,String connection,TerrakubeWorkspaceSpec spec,boolean failIfExists){
-  super(context);this.connection=connection;this.spec=spec;this.failIfExists=failIfExists;
- }
- @Override public boolean start(){task=Timer.get().submit(this::advance);return false;}
- @Override public void onResume(){if(!bodyStarted)task=Timer.get().submit(this::advance);}
- private void log(String m) throws IOException,InterruptedException {
-  getContext().get(TaskListener.class).getLogger().println("IaC terrakube: "+m);
+  super(context,"terrakube");this.connection=connection;this.spec=spec;this.failIfExists=failIfExists;
  }
  private String organization(){return "'"+spec.organizationName+"'";}
  private String describe(){return "workspace '"+spec.workspaceName+"' in organization "+organization();}
 
- private void advance(){
-  if(bodyStarted||stopped)return;
-  try{
-   Run<?,?> run=getContext().get(Run.class);
-   try(HttpJsonClient c=TerrakubeConnections.get().client(connection,run)){
-    TerrakubeApi api=new TerrakubeApi(c);
-    if(organizationId==null)organizationId=api.organizationIdByName(spec.organizationName);
-    if(workspaceId==null&&!findOrCreate(api,run))return;
-    if(created&&spec.hasVariables())setVariables(api,secrets(run));
-    log("workspace "+workspaceId+" is ready");
-    startBody();
-   }
-  }catch(Throwable e){getContext().onFailure(e);}
+ @Override protected boolean advance() throws Exception {
+  Run<?,?> run=getContext().get(Run.class);
+  try(HttpJsonClient c=TerrakubeConnections.get().client(connection,run)){
+   TerrakubeApi api=new TerrakubeApi(c);
+   if(organizationId==null)organizationId=api.organizationIdByName(spec.organizationName);
+   if(workspaceId==null)findOrCreate(api,run);
+   if(created&&spec.hasVariables())setVariables(api,secrets(run));
+   log("workspace "+workspaceId+" is ready");
+   return true;
+  }
  }
  private List<String> named(TerrakubeApi api) throws Exception {
   List<String> ids=api.workspaceIdsByName(organizationId,organization(),spec.workspaceName);
@@ -64,19 +49,19 @@ final class TerrakubeWorkspaceExecution extends StepExecution {
     "' in organization "+organization()+" "+ids+"; delete the extra workspaces");
   return ids;
  }
- /** False when an existing workspace was kept and the body already started. */
- private boolean findOrCreate(TerrakubeApi api,Run<?,?> run) throws Exception {
+ /** Sets workspaceId, and created when this execution created the workspace. */
+ private void findOrCreate(TerrakubeApi api,Run<?,?> run) throws Exception {
   List<String> ids=named(api);
   if(!ids.isEmpty()&&createRequested){
-   workspaceId=ids.get(0);created=true;getContext().saveState();
+   workspaceId=ids.get(0);created=true;save();
    log("found "+describe()+" created before the restart: "+workspaceId);
-   return true;
+   return;
   }
-  if(!ids.isEmpty())return keep(ids.get(0));
+  if(!ids.isEmpty()){keep(ids.get(0));return;}
   // Credentials are checked before the workspace exists, so that a missing one does not leave it half configured.
   secrets(run);
   createRequested=true;
-  getContext().saveState().get(1,TimeUnit.MINUTES);
+  save();
   log("creating "+describe()+(spec.source==null?" for CLI-driven runs":" from "+spec.source+" branch "+spec.branchName)+variableNames());
   String id;
   try{id=api.createWorkspace(organizationId,spec.attributes(),spec.relationships());}
@@ -85,9 +70,10 @@ final class TerrakubeWorkspaceExecution extends StepExecution {
    ids=named(api);
    if(ids.isEmpty())throw e;
    log(describe()+" was created at the same time by someone else");
-   return keep(ids.get(0));
+   keep(ids.get(0));
+   return;
   }
-  workspaceId=id;created=true;getContext().saveState();
+  workspaceId=id;created=true;save();
   log("created workspace "+id);
   List<String> others=new ArrayList<>(api.workspaceIdsByName(organizationId,organization(),spec.workspaceName));
   others.remove(id);
@@ -96,14 +82,11 @@ final class TerrakubeWorkspaceExecution extends StepExecution {
    throw new IllegalStateException("Another workspace named '"+spec.workspaceName+"' was created in organization "+organization()+
      " at the same time: "+all+"; delete the extra workspaces and serialize builds that create workspaces");
   }
-  return true;
  }
- private boolean keep(String id) throws Exception {
+ private void keep(String id) throws Exception {
   if(failIfExists)throw new IllegalStateException("Terrakube "+describe()+" already exists: "+id+" (ifExists: 'fail')");
-  workspaceId=id;getContext().saveState();
+  workspaceId=id;save();
   log("found existing workspace "+id+"; configuration and variables not compared or changed");
-  startBody();
-  return false;
  }
  private String variableNames(){
   StringJoiner names=new StringJoiner(", "," with ","").setEmptyValue("");
@@ -141,21 +124,5 @@ final class TerrakubeWorkspaceExecution extends StepExecution {
       e.getMessage()+"); set the missing variables in Terrakube or delete the workspace before running this stage again",e);
    }
   }
- }
- private void startBody() throws Exception {
-  if(stopped||bodyStarted)return;
-  bodyStarted=true;
-  getContext().saveState();
-  BodyExecution started=getContext().newBodyInvoker().withCallback(BodyExecutionCallback.wrap(getContext())).start();
-  body=started;
-  if(stopped)started.cancel(stopCause);
- }
- @Override public void stop(Throwable cause){
-  stopCause=cause;
-  stopped=true;
-  if(task!=null)task.cancel(false);
-  BodyExecution running=body;
-  if(running!=null)running.cancel(cause);
-  else getContext().onFailure(cause);
  }
 }
