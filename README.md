@@ -182,6 +182,12 @@ Keep API tokens in Jenkins Credentials and use HTTPS for production endpoints. S
 
 The public DSL retains `server`, `organizationId`, `workspaceId`, and `templateId`, with `organizationName`, `workspaceName`, and `templateName` as optional alternatives; the shared core remains provider-neutral. The IDs are now optional in Pipeline Syntax, since a name can replace each of them.
 
+## Possible future features
+
+These ideas are not planned and may never be implemented. They are listed so that the current scope is clear.
+
+- **Workspace creation.** The plugin works only with organizations, workspaces and templates that already exist in Terrakube. A future step could create a workspace, or update its settings such as the VCS repository and variables, and reuse an existing workspace instead of creating a duplicate. Creating and configuring workspaces is a different concern from running jobs on them, so this does not seem to belong in this plugin at the moment.
+
 ## Development
 
 ```bash
