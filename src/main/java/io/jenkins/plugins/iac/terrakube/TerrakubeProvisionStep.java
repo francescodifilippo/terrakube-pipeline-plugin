@@ -53,7 +53,7 @@ public final class TerrakubeProvisionStep extends AbstractProvisionStep {
   return kind+(id!=null?"Id":"Name");
  }
  /** Null for null/blank; otherwise the exact name, 1..255 characters without control characters. */
- private static String name(String value,String name){
+ static String name(String value,String name){
   if(value==null||value.isBlank())return null;
   if(value.length()>255||value.chars().anyMatch(c->c<32||c==127))
    throw new IllegalArgumentException(name+" must contain 1..255 characters without control characters");

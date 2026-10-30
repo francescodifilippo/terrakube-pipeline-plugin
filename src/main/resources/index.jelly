@@ -1,4 +1,4 @@
 <?jelly escape-by-default='true'?>
 <div>
-  Declarative Jenkins Pipeline integration for Terrakube, including remote jobs, execution monitoring, and asynchronous workflows.
+  Declarative Jenkins Pipeline integration for Terrakube, including remote jobs, execution monitoring, asynchronous workflows, and workspace creation.
 </div>
